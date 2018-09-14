@@ -12,6 +12,7 @@ cert_status_file = open(cert_output_path, 'w')
 
 
 
+
 def check_cert(url):
     try:
         p1 = subprocess.Popen(['openssl', 's_client',  '-showcerts', '-connect', url],
@@ -27,9 +28,10 @@ def check_cert(url):
                    stdout=subprocess.PIPE,
                    universal_newlines=True)
         stdout, _ = p2.communicate(input=stdout, timeout=2)
-        cert_status_file.write(str(stdout) + '\n')
-        cert_status_file.close()
-        print(stdout.splitlines())
+        result = stdout.splitlines()
+        result.insert(0, url)
+        cert_status_file.write(str(result) + '\n')
+        # print(stdout.splitlines())
 
     except Exception as e:
         print('Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(e).__name__, e)
@@ -42,7 +44,8 @@ def main():
         for line in lines:
             url_list.append(line.strip('\n'))
     for url in url_list:
-      check_cert(url)
+        check_cert(url)
+    cert_status_file.close()
 
 if __name__ == '__main__':
     main()
