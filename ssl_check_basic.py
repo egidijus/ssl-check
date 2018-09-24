@@ -1,41 +1,54 @@
 #!/usr/bin/env python
 
-import subprocess, sys
-from subprocess import Popen
-import datetime
 
-# url = 'yahoo.com:443'
-url_list_path = 'urls.txt'
+import socket
+import ssl
+
+#
+# linux local ca
+#for cert in $(ls /etc/ssl/certs/); do openssl x509 -in /etc/ssl/certs/$cert -noout --issuer --issuer_hash --hash --serial; done > ~/.virtualenvs/ssl-check/linux-local-ca-issuers.txt
+# bad issuers 
+# 	"Symantec",
+# 	"GeoTrust",
+# 	"thawte",
+# 	"RapidSSL",
+# 	"VeriSign",
+# 	"Equifax",
+# before 2017 december 1
+
+# url_list_path = 'short_url.txt'
+url_list_path = 'urls_u.txt'
 cert_output_path = 'cert_ouput.txt'
 cert_status_file = open(cert_output_path, 'w')
 
 
+context = ssl.create_default_context()
 
-
+def flatten(elem, leaves=None):
+    leaves =  []
+    if isinstance(elem, tuple):
+        for member in elem:
+            leaves.extend(flatten(member))
+    else:
+        leaves.append(elem)
+    return leaves
 
 def check_cert(url):
     try:
-        p1 = subprocess.Popen(['openssl', 's_client',  '-showcerts', '-connect', url],
-                  stdout=subprocess.PIPE,
-                  bufsize=1,
-                  universal_newlines=True)
-        stdout, _ = p1.communicate(input="\n")
-        p1.stdout.close()
-        p2 = subprocess.Popen([
-            'openssl', 'x509', '-noout', '-issuer', '-issuer_hash', '-subject'
-        ],
-                   stdin=subprocess.PIPE,
-                   stdout=subprocess.PIPE,
-                   universal_newlines=True)
-        stdout, _ = p2.communicate(input=stdout, timeout=2)
-        result = stdout.splitlines()
-        result.insert(0, url)
-        cert_status_file.write(str(result) + '\n')
-        # print(stdout.splitlines())
-
+        with socket.create_connection((url, 443), timeout=2) as sock:
+            with context.wrap_socket(sock, server_hostname=url) as connection:
+                result = connection.getpeercert()
+                basic_result =  (result['issuer'][
+                    0:3], result['notBefore'], result['notAfter'])
+                compiled_result = ['MAYBE'] + [url] + flatten(basic_result)
+                print(flatten(basic_result))
+            cert_status_file.write(str(compiled_result) + '\n')
     except Exception as e:
-        print('Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(e).__name__, e)
-        cert_status_file.close()
+        fail = ['FAIL', url, ' failed with ', e]
+        print(fail)
+        cert_status_file.write(str(fail) + '\n')
+        return
+
 
 def main():
     url_list = []
