@@ -4,7 +4,6 @@
 import socket
 import ssl
 from datetime import datetime
-from datetime import timedelta
 
 #
 # linux local ca
@@ -22,7 +21,7 @@ url_list_path = 'urls.txt'
 cert_output_path = 'cert_ouput.txt'
 cert_status_file = open(cert_output_path, 'w')
 bad_issuers = ("Symantec", "GeoTrust", "thawte", "RapidSSL", "VeriSign", "Equifax")
-bad_list = {}
+# bad_list = {}
 now_date = datetime.now()
 day = 86400
 
@@ -69,41 +68,61 @@ def check_cert(url):
             with context.wrap_socket(sock, server_hostname=url) as connection:
                 result = connection.getpeercert()
                 issuer = ' '.join(str(e) for e in flatten(result['issuer'][0:3]))
-                valid_from = flatten(result['notBefore'])
-                valid_until = flatten(result['notAfter'])
+                valid_from = flatten(result['notBefore'])[0]
+                valid_until = flatten(result['notAfter'])[0]
                 result_dictionary = {
                     "host": url,
                     "issuer": issuer,
                     "valid_from": valid_from,
                     "valid_until": valid_until
                 }
-                valid_from = datify_date(','.join(result_dictionary['valid_from']))
-                valid_until = datify_date(','.join(result_dictionary['valid_until']))
+                valid_from = datify_date(
+                    result_dictionary['valid_from'])
+                valid_until = datify_date(
+                    result_dictionary['valid_until'])
                 # print(valid_from)
                 # print(issuer)
                 # print(check_expiration_date(valid_until))
+
+                reasons = []
+
                 if check_expiration_date(valid_until) < 300:
                     """
                     if expiration days left less than value, put it in the list of dictionaries
                     """
-                    bad_list.update({
-                        "host": url,
-                        "issuer": issuer,
-                        "valid_from": valid_from,
-                        "valid_until": valid_until,
-                        "reason": "{} {} {}".format("less than", int(check_expiration_date(valid_until)), "days left")
+                    reasons.append( {
+                        "host":
+                        url,
+                        "issuer":
+                        issuer,
+                        "valid_from":
+                        valid_from.strftime("%Y-%m-%d"),
+                        "valid_until":
+                        valid_until.strftime("%Y-%m-%d"),
+                        "reason":
+                        "{} {} {}".format(
+                            "less than", int(
+                                check_expiration_date(valid_until)),
+                            "days left")
                     })
-                    cert_status_file.write(str(bad_list) + '\n')
+                    # cert_status_file.write(str(bad_list) + '\n')
                 if any(bad in issuer for bad in bad_issuers):
-                    bad_list.update({
-                        "host": url,
-                        "issuer": issuer,
-                        "valid_from": valid_from,
-                        "valid_until": valid_until,
-                        "reason": "issuer"
+                    reasons.append({
+                        "host":
+                        url,
+                        "issuer":
+                        issuer,
+                        "valid_from":
+                        valid_from.strftime("%Y-%m-%d"),
+                        "valid_until":
+                        valid_until.strftime("%Y-%m-%d"),
+                        "reason":"issuer"
                     })
-                    cert_status_file.write(str(bad_list) + '\n')
-                print(bad_list)
+                    # cert_status_file.write(str(bad_list) + '\n')
+                print(reasons)
+                if reasons:
+                    cert_status_file.write(str(reasons) + '\n')
+                    cert_status_file.flush()
 
     except Exception as e:
         fail = {
