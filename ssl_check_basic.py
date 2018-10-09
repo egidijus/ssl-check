@@ -1,41 +1,142 @@
 #!/usr/bin/env python
 
-import subprocess, sys
-from subprocess import Popen
-import datetime
 
-# url = 'yahoo.com:443'
+import socket
+import ssl
+from datetime import datetime
+
+#
+# linux local ca
+#for cert in $(ls /etc/ssl/certs/); do openssl x509 -in /etc/ssl/certs/$cert -noout --issuer --issuer_hash --hash --serial; done > ~/.virtualenvs/ssl-check/linux-local-ca-issuers.txt
+# bad issuers
+# 	"Symantec",
+# 	"GeoTrust",
+# 	"thawte",
+# 	"RapidSSL",
+# 	"VeriSign",
+# 	"Equifax",
+# before 2017 december 1
+
 url_list_path = 'urls.txt'
 cert_output_path = 'cert_ouput.txt'
 cert_status_file = open(cert_output_path, 'w')
+bad_issuers = ("Symantec", "GeoTrust", "thawte", "RapidSSL", "VeriSign", "Equifax")
+# bad_list = {}
+now_date = datetime.now()
+day = 86400
+
+context = ssl.create_default_context()
+def datify_date(the_date):
+    # the_date = the_date.replace(tzinfo, "None")
+    # strftime Return a string representing the date and time, controlled by an explicit format string
+    # strptime Return a datetime corresponding to date_string
+    """
+    this takes in the wierdo date like 'Dec 01 00:00:00 2018 GMT' and churns out a datetime compatible date
+    we only chew first 20 charactes, because i do not want to faff with timezones
+    """
+    return datetime.strptime(the_date[:20], '%b %d %H:%M:%S %Y')
 
 
+def check_symantec_date(ssl_date_today):
+    return
+
+def flatten(elem, leaves=None):
+    leaves =  []
+    if isinstance(elem, tuple):
+        for member in elem:
+            leaves.extend(flatten(member))
+    else:
+        leaves.append(elem)
+    return leaves
+
+def check_expiration_date(ssl_expiration_date):
+    """
+    accepts expiration date, returns days left until expiration.
+    """
+    if type(ssl_expiration_date) is datetime:
+        time_left = ssl_expiration_date - now_date
+        return time_left.total_seconds() / day
+    else:
+        print (ssl_expiration_date + " type, is not datetime")
+    return time_left.total_seconds() / day
 
 
 
 def check_cert(url):
     try:
-        p1 = subprocess.Popen(['openssl', 's_client',  '-showcerts', '-connect', url],
-                  stdout=subprocess.PIPE,
-                  bufsize=1,
-                  universal_newlines=True)
-        stdout, _ = p1.communicate(input="\n")
-        p1.stdout.close()
-        p2 = subprocess.Popen([
-            'openssl', 'x509', '-noout', '-issuer', '-issuer_hash', '-subject'
-        ],
-                   stdin=subprocess.PIPE,
-                   stdout=subprocess.PIPE,
-                   universal_newlines=True)
-        stdout, _ = p2.communicate(input=stdout, timeout=2)
-        result = stdout.splitlines()
-        result.insert(0, url)
-        cert_status_file.write(str(result) + '\n')
-        # print(stdout.splitlines())
+        with socket.create_connection((url, 443), timeout=2) as sock:
+            with context.wrap_socket(sock, server_hostname=url) as connection:
+                result = connection.getpeercert()
+                issuer = ' '.join(str(e) for e in flatten(result['issuer'][0:3]))
+                valid_from = flatten(result['notBefore'])[0]
+                valid_until = flatten(result['notAfter'])[0]
+                result_dictionary = {
+                    "host": url,
+                    "issuer": issuer,
+                    "valid_from": valid_from,
+                    "valid_until": valid_until
+                }
+                valid_from = datify_date(
+                    result_dictionary['valid_from'])
+                valid_until = datify_date(
+                    result_dictionary['valid_until'])
+                # print(valid_from)
+                # print(issuer)
+                # print(check_expiration_date(valid_until))
+
+                reasons = []
+
+                if check_expiration_date(valid_until) < 300:
+                    """
+                    if expiration days left less than value, put it in the list of dictionaries
+                    """
+                    reasons.append( {
+                        "host":
+                        url,
+                        "issuer":
+                        issuer,
+                        "valid_from":
+                        valid_from.strftime("%Y-%m-%d"),
+                        "valid_until":
+                        valid_until.strftime("%Y-%m-%d"),
+                        "reason":
+                        "{} {} {}".format(
+                            "less than", int(
+                                check_expiration_date(valid_until)),
+                            "days left")
+                    })
+                    # cert_status_file.write(str(bad_list) + '\n')
+                if any(bad in issuer for bad in bad_issuers):
+                    reasons.append({
+                        "host":
+                        url,
+                        "issuer":
+                        issuer,
+                        "valid_from":
+                        valid_from.strftime("%Y-%m-%d"),
+                        "valid_until":
+                        valid_until.strftime("%Y-%m-%d"),
+                        "reason":"issuer"
+                    })
+                    # cert_status_file.write(str(bad_list) + '\n')
+                print(reasons)
+                if reasons:
+                    cert_status_file.write(str(reasons) + '\n')
+                    cert_status_file.flush()
 
     except Exception as e:
-        print('Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(e).__name__, e)
-        cert_status_file.close()
+        fail = {
+            "host": url,
+            "issuer": "none",
+            "valid_from": "none",
+            "valid_until": "none",
+            "reason": e
+        }
+        # ['FAIL', url, ' failed with ', e]
+        # print(fail)
+        cert_status_file.write(str(fail) + '\n')
+        return
+
 
 def main():
     url_list = []
