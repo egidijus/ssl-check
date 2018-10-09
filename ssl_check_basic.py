@@ -17,13 +17,14 @@ from datetime import datetime
 # 	"Equifax",
 # before 2017 december 1
 
-url_list_path = 'urls.txt'
+domain_list_path = 'domains.txt'
 cert_output_path = 'cert_ouput.txt'
 cert_status_file = open(cert_output_path, 'w')
 bad_issuers = ("Symantec", "GeoTrust", "thawte", "RapidSSL", "VeriSign", "Equifax")
-# bad_list = {}
 now_date = datetime.now()
-day = 86400
+one_day = 86400
+timeout_seconds = 2
+days_until_expired = 100
 
 context = ssl.create_default_context()
 def datify_date(the_date):
@@ -31,7 +32,7 @@ def datify_date(the_date):
     # strftime Return a string representing the date and time, controlled by an explicit format string
     # strptime Return a datetime corresponding to date_string
     """
-    this takes in the wierdo date like 'Dec 01 00:00:00 2018 GMT' and churns out a datetime compatible date
+    This takes in the wierdo date like 'Dec 01 00:00:00 2018 GMT' and churns out a datetime compatible date
     we only chew first 20 charactes, because i do not want to faff with timezones
     """
     return datetime.strptime(the_date[:20], '%b %d %H:%M:%S %Y')
@@ -41,6 +42,9 @@ def check_symantec_date(ssl_date_today):
     return
 
 def flatten(elem, leaves=None):
+    """
+    This accepts any nested lists and sublists, and expands it, so we have a flat structure, and we do not need to faff with optional nested lists.
+    """
     leaves =  []
     if isinstance(elem, tuple):
         for member in elem:
@@ -55,23 +59,24 @@ def check_expiration_date(ssl_expiration_date):
     """
     if type(ssl_expiration_date) is datetime:
         time_left = ssl_expiration_date - now_date
-        return time_left.total_seconds() / day
+        return time_left.total_seconds() / one_day
     else:
         print (ssl_expiration_date + " type, is not datetime")
-    return time_left.total_seconds() / day
+    return time_left.total_seconds() / one_day
 
 
 
-def check_cert(url):
+def check_cert(domain):
     try:
-        with socket.create_connection((url, 443), timeout=2) as sock:
-            with context.wrap_socket(sock, server_hostname=url) as connection:
+        with socket.create_connection((domain, 443),
+                                      timeout=timeout_seconds) as sock:
+            with context.wrap_socket(sock, server_hostname=domain) as connection:
                 result = connection.getpeercert()
                 issuer = ' '.join(str(e) for e in flatten(result['issuer'][0:3]))
                 valid_from = flatten(result['notBefore'])[0]
                 valid_until = flatten(result['notAfter'])[0]
                 result_dictionary = {
-                    "host": url,
+                    "host": domain,
                     "issuer": issuer,
                     "valid_from": valid_from,
                     "valid_until": valid_until
@@ -86,13 +91,13 @@ def check_cert(url):
 
                 reasons = []
 
-                if check_expiration_date(valid_until) < 300:
+                if check_expiration_date(valid_until) < days_until_expired:
                     """
                     if expiration days left less than value, put it in the list of dictionaries
                     """
                     reasons.append( {
                         "host":
-                        url,
+                        domain,
                         "issuer":
                         issuer,
                         "valid_from":
@@ -109,7 +114,7 @@ def check_cert(url):
                 if any(bad in issuer for bad in bad_issuers):
                     reasons.append({
                         "host":
-                        url,
+                        domain,
                         "issuer":
                         issuer,
                         "valid_from":
@@ -126,26 +131,26 @@ def check_cert(url):
 
     except Exception as e:
         fail = {
-            "host": url,
+            "host": domain,
             "issuer": "none",
             "valid_from": "none",
             "valid_until": "none",
             "reason": e
         }
-        # ['FAIL', url, ' failed with ', e]
+        # ['FAIL', domain, ' failed with ', e]
         # print(fail)
         cert_status_file.write(str(fail) + '\n')
         return
 
 
 def main():
-    url_list = []
-    with open(url_list_path, 'r') as file:
-        lines = file.readlines()
-        for line in lines:
-            url_list.append(line.strip('\n'))
-    for url in url_list:
-        check_cert(url)
+    domain_list = []
+    with open(domain_list_path, 'r') as file:
+        domains = file.readlines()
+        for domain in domains:
+            domain_list.append(domain.strip('\n'))
+    for domain in domain_list:
+        check_cert(domain)
     cert_status_file.close()
 
 if __name__ == '__main__':
