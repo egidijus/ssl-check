@@ -3,6 +3,11 @@ You should not need to install anything.
 You only need to add your list of domains to the file urls.txt
 The script will produce a file `cert_ouput.txt` with a list of certificates that have failed and the reason why they have failed.
 
+## Requirements
+* python3 for ssl-check
+* for `aws_get_domains.py`, python3, pprint, boto3, you can install via requirements.txt
+
+
 ## Failure tests/conditions
 This is designed to firstly test for bad issuers, which will be untrusted by various operating systems and browsers.
 "Bad issuers"
@@ -16,3 +21,8 @@ This is designed to firstly test for bad issuers, which will be untrusted by var
 Secondly I am testing for expiration date, if there are less than `x` days remaining, add the domain to the list of "bad" domains.
 
 https://knowledge.digicert.com/alerts/ALERT2530.html
+
+## Tips
+* Try running `aws_get_domains.py` to produce a list of domains in your aws route53.
+* Update the `default` in `boto3.setup_default_session(profile_name='default')` to your aws profile in `~/.aws/credentials`
+
