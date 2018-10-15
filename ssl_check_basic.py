@@ -2,6 +2,7 @@
 
 import socket
 import ssl
+import csv
 from datetime import datetime
 
 #
@@ -16,7 +17,7 @@ from datetime import datetime
 #   "Equifax",
 # before 2017 december 1
 
-domain_list_path = 'domains.txt'
+domain_list_path = 'demo.txt'
 cert_output_path = 'cert_ouput.txt'
 cert_status_file = open(cert_output_path, 'w')
 bad_issuers = ("Symantec", "GeoTrust", "thawte", "RapidSSL", "VeriSign",
@@ -27,6 +28,19 @@ timeout_seconds = 2
 days_until_expired = 100
 
 context = ssl.create_default_context()
+
+output_dictionary = {
+    "domain": "None",
+    "valid_until": "None",
+    "reason": "None",
+    "checked_on": "None"
+}
+
+write = csv.DictWriter(cert_status_file, output_dictionary.keys())
+write.writeheader()
+"""
+let's make a csv, all csvs have headers
+"""
 
 
 def datify_date(the_date):
@@ -78,7 +92,8 @@ def check_cert(domain):
                 result_dictionary = {
                     "domain": domain,
                     "issuer": issuer,
-                    "valid_until": valid_until
+                    "valid_until": valid_until,
+                    "checked_on": now_date.strftime("%Y-%m-%d")
                 }
                 valid_until = datify_date(result_dictionary['valid_until'])
                 bad_list = []
@@ -95,23 +110,33 @@ def check_cert(domain):
                         "{} {} {}".format(
                             "less than", int(
                                 check_expiration_date(valid_until)),
-                            "days left")
+                            "days left"),
+                        "checked_on":
+                        now_date.strftime("%Y-%m-%d")
                     }
-                    cert_status_file.write(str(reasons) + '\n')
+                    print(reasons)
+                    write.writerow(reasons)
                     cert_status_file.flush()
                 if any(bad in issuer for bad in bad_issuers):
                     reasons = {
                         "domain": domain,
                         "valid_until": valid_until.strftime("%Y-%m-%d"),
-                        "reason": "issuer"
+                        "reason": "issuer",
+                        "checked_on": now_date.strftime("%Y-%m-%d")
                     }
-                    cert_status_file.write(str(reasons) + '\n')
+                    print(reasons)
+                    write.writerow(reasons)
                     cert_status_file.flush()
-                print(reasons)
     except Exception as e:
-        fail = {"domain": domain, "valid_until": "none", "reason": e}
+        fail = {
+            "domain": domain,
+            "valid_until": "none",
+            "reason": e,
+            "checked_on": now_date.strftime("%Y-%m-%d")
+        }
         print(fail)
-        cert_status_file.write(str(fail) + '\n')
+        write.writerow(fail)
+        cert_status_file.flush()
         return
 
 
