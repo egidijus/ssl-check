@@ -7,6 +7,14 @@ The script will produce a file `cert_ouput.txt` with a list of certificates that
 * python3 for ssl-check
 * for `aws_get_domains.py`, python3, pprint, boto3, you can install via requirements.txt
 
+## Usage instructions
+
+1. You will need an input file, by default the script reads `demo.txt`.
+1. Edit `demo.txt` add your domains, one domain per line.
+1. Run `ssl_check_basic.py` from your terminal like this `python ssl_check_basic.py`
+1. Your result should live in a `cert_ouput.txt` file in CSV format
+
+
 ## Example ouput
 CSVs !!!
 ```
