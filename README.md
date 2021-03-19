@@ -5,7 +5,11 @@ The script will produce a file `cert_ouput.txt` with a list of certificates that
 
 ## Requirements
 * python3 for ssl-check
-* for `aws_get_domains.py`, python3, pprint, boto3, you can install via requirements.txt
+* for `aws_get_domains.py`, 
+
+```
+pip install -r requirements.txt
+```
 
 ## Usage instructions
 
